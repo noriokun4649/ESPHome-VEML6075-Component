@@ -8,63 +8,89 @@ static const char *const TAG = "veml6075.sensor";
 
 void VEML6075Component::setup() {
   ESP_LOGCONFIG(TAG, "Setting up VEML6075");
-  this->configure();
-  state_ = State::READY;
+
+  if (!this->configure()) {
+    ESP_LOGE(TAG, "Sensor configuration failed");
+    this->mark_failed();
+  } else {
+    state_ = State::WAITING_READY;
+
+    // (Same as VEML7700 component -- wait 2x read_delays before reading)
+    this->set_timeout(2 * this->_read_delay, [this]() { this->state_ = State::READY; });
+  }
 }
 
-void VEML6075Component::configure() {
-  ESP_LOGV(TAG, "Configure");
+bool VEML6075Component::configure(void) {
+  ESP_LOGV(TAG, "Starting to configure sensor");
 
-  _commandRegister.reg = 0;
+  _command_register.reg = 0;
 
   uint8_t data[2] = {0x00};
-
-  this->read_register(REG_ID, data, 2, false);
-
-  if (data[0] != 0x26) {
-    ESP_LOGE(TAG, "Wrong manufacturer id");
-    return;
+  i2c::ErrorCode status = this->read_register(REG_ID, data, 2, false);
+  if (status != i2c::ERROR_OK) {
+    ESP_LOGE(TAG, "Failed to read manufacturer ID");
+    return false;
   }
 
-  this->shutdown(true);
+  if (data[0] != MANUFACTURER_ID) {
+    ESP_LOGE(TAG, "Wrong manufacturer id, expected 0x%.2X but got 0x%.2X", MANUFACTURER_ID, data[0]);
+    return false;
+  }
 
-  this->setForcedMode(false);
+  if (this->shutdown(true) != i2c::ERROR_OK) {
+    return false;
+  }
 
-  this->setIntegrationTime(VEML6075_100MS);
+  if (this->setForcedMode(false) != i2c::ERROR_OK) {
+    return false;
+  }
 
-  this->setHighDynamic(false);
+  if (this->setIntegrationTime(_integration_time) != i2c::ERROR_OK) {
+    return false;
+  }
 
-  this->shutdown(false);
+  if (this->setHighDynamic(_hd_enabled) != i2c::ERROR_OK) {
+    return false;
+  }
 
-  return;
+  if (this->shutdown(false) != i2c::ERROR_OK) {
+    return false;
+  }
+
+  ESP_LOGV(TAG, "Sensor successfully configured");
+
+  return true;
 }
 
-void VEML6075Component::shutdown(bool sd) {
-  _commandRegister.SD = sd;
-  auto err = this->write_register(REG_UV_CONF, _commandRegister.reg_bytes, 2);
+i2c::ErrorCode VEML6075Component::shutdown(bool sd) {
+  _command_register.SD = sd;
+  auto err = this->write_register(REG_UV_CONF, _command_register.reg_bytes, 2);
   if (err != i2c::ERROR_OK) {
-    ESP_LOGW(TAG, "Shutdown failed ");
+    ESP_LOGE(TAG, "Shutdown command failed");
   }
+  return err;
 }
 
-void VEML6075Component::setForcedMode(bool flag) {
-  _commandRegister.UV_AF = flag;
-  auto err = this->write_register(REG_UV_CONF, _commandRegister.reg_bytes, 2);
+i2c::ErrorCode VEML6075Component::setForcedMode(bool flag) {
+  _command_register.UV_AF = flag;
+  auto err = this->write_register(REG_UV_CONF, _command_register.reg_bytes, 2);
   if (err != i2c::ERROR_OK) {
-    ESP_LOGW(TAG, "Forced failed ");
+    ESP_LOGE(TAG, "Set forced mode failed");
   }
+  return err;
 }
 
-void VEML6075Component::setIntegrationTime(veml6075_integrationtime_t itime) {
+i2c::ErrorCode VEML6075Component::setIntegrationTime(veml6075_integrationTime itime) {
+  _integration_time = itime;
   // Set integration time
-  _commandRegister.UV_IT = (uint8_t) itime;
-  auto err = this->write_register(REG_UV_CONF, _commandRegister.reg_bytes, 2);
+  _command_register.UV_IT = (uint8_t) _integration_time;
+  auto err = this->write_register(REG_UV_CONF, _command_register.reg_bytes, 2);
   if (err != i2c::ERROR_OK) {
-    ESP_LOGW(TAG, "Set integration failed ");
+    ESP_LOGE(TAG, "Set integration time failed");
   }
 
   _read_delay = 0;
-  switch (itime) {
+  switch (_integration_time) {
     case VEML6075_50MS:
       _read_delay = 50;
       break;
@@ -81,43 +107,48 @@ void VEML6075Component::setIntegrationTime(veml6075_integrationtime_t itime) {
       _read_delay = 800;
       break;
   }
+
+  return err;
 }
 
-void VEML6075Component::setHighDynamic(bool hd) {
-  _commandRegister.UV_HD = hd;
-  auto err = this->write_register(REG_UV_CONF, _commandRegister.reg_bytes, 2);
+i2c::ErrorCode VEML6075Component::setHighDynamic(bool hd) {
+  _hd_enabled = hd;
+
+  _command_register.UV_HD = _hd_enabled;
+  auto err = this->write_register(REG_UV_CONF, _command_register.reg_bytes, 2);
   if (err != i2c::ERROR_OK) {
-    ESP_LOGW(TAG, "High dynamic failed ");
+    ESP_LOGE(TAG, "Set high dynamic mode failed");
   }
+  return err;
 }
 
-void VEML6075Component::takeReading(void) {
+i2c::ErrorCode VEML6075Component::takeReading(void) {
   uint8_t uva_data[2] = {0x00};
   uint8_t uvb_data[2] = {0x00};
   uint8_t uvcomp1_data[2] = {0x00};
   uint8_t uvcomp2_data[2] = {0x00};
 
-  // take the reading immediately
+  // Take the reading immediately
   auto err1 = this->read_register(REG_UVA_DATA, uva_data, 2, false);
   auto err2 = this->read_register(REG_UVB_DATA, uvb_data, 2, false);
   auto err3 = this->read_register(REG_UVCOMP1_DATA, uvcomp1_data, 2, false);
   auto err4 = this->read_register(REG_UVCOMP2_DATA, uvcomp2_data, 2, false);
 
   if (err1 != i2c::ERROR_OK) {
-    ESP_LOGW(TAG, "Read1 failed ");
-    return;
+    ESP_LOGE(TAG, "Read UVA register failed");
+    return err1;
   }
   if (err2 != i2c::ERROR_OK) {
-    ESP_LOGW(TAG, "Read2 failed ");
-    return;
+    ESP_LOGE(TAG, "Read UVB register failed");
+    return err2;
   }
   if (err3 != i2c::ERROR_OK) {
-    ESP_LOGW(TAG, "Read3 failed ");
-    return;
+    ESP_LOGE(TAG, "Read UV Comp1 register failed");
+    return err3;
   }
   if (err4 != i2c::ERROR_OK) {
-    ESP_LOGW(TAG, "Read4 failed ");
-    return;
+    ESP_LOGE(TAG, "Read UV Comp2 register failed");
+    return err4;
   }
 
   uint16_t rawUVA = (uva_data[0] & 0x00FF) | ((uva_data[1] & 0x00FF) << 8);
@@ -134,15 +165,13 @@ void VEML6075Component::takeReading(void) {
   float uvia = uvaCalc * (1.0 / UV_ALPHA) * _aResponsivity;
   float uvib = uvbCalc * (1.0 / UV_BETA) * _bResponsivity;
   float uvIndex = (uvia + uvib) / 2.0;
-  
-  if (_hdEnabled) {
+
+  if (_hd_enabled) {
     uvIndex *= HD_SCALAR;
   }
 
-
-  ESP_LOGI(TAG, "Read success with UVAcalc %f and UVBcalc %f ", uvaCalc, uvbCalc);
-  ESP_LOGI(TAG, "UV index: %f ", uvIndex);
-
+  ESP_LOGV(TAG, "Read success with UVAcalc %f and UVBcalc %f ", uvaCalc, uvbCalc);
+  ESP_LOGV(TAG, "UV index: %f ", uvIndex);
 
   // Publish
   if (this->uva_sensor_ != nullptr) {
@@ -168,28 +197,91 @@ void VEML6075Component::takeReading(void) {
     this->raw4_sensor_->publish_state(comp2);
   }
 
-  
+  return i2c::ERROR_OK;
 }
 
 void VEML6075Component::dump_config() {
-  ESP_LOGCONFIG(TAG, "Hello");
-  ESP_LOGCONFIG(TAG, "Hello");
+  if (state_ == State::READY) {
+    ESP_LOGCONFIG(TAG, "Sensor started successfully!");
+  } else if (state_ == State::INIT) {
+    ESP_LOGCONFIG(TAG, "Sensor failed to initialise!");
+  } else {
+    ESP_LOGCONFIG(TAG, "Sensor in invalid state / not started!");
+  }
+  ESP_LOGCONFIG(TAG, "Integration time: %hu", _read_delay);
+  ESP_LOGCONFIG(TAG, "High dynamic mode: %d", _command_register.UV_HD);
+}
+
+i2c::ErrorCode VEML6075Component::checkReconfigure(void) {
+  // Read the config register
+  uint8_t data[2] = {0x00};
+  i2c::ErrorCode err = this->read_register(REG_UV_CONF, data, 2, false);
+  if (err != i2c::ERROR_OK) {
+    ESP_LOGE(TAG, "Failed to read config register while checking for reconfiguration");
+    return err;
+  }
+
+  ConfigurationRegister current_cr = {};
+  current_cr.reg_bytes[0] = data[0];
+  current_cr.reg_bytes[1] = data[1];
+
+  bool reconfigure = false;
+
+  if (current_cr.UV_IT != (uint8_t) _integration_time) {
+  // if (true) {
+    // Reconfigure integration time
+    ESP_LOGV(TAG, "Integration time changed, reconfiguring sensor");
+    reconfigure = true;
+  }
+
+  if (current_cr.UV_HD != _hd_enabled) {
+  // if (true) {
+    // Reconfigure HD mode
+    ESP_LOGV(TAG, "High dynamic mode changed, reconfiguring sensor");
+    reconfigure = true;
+  }
+
+  if (!reconfigure) {
+    // We're done
+    return i2c::ERROR_OK;
+  }
+
+  if (!this->configure()) {
+    return i2c::ERROR_UNKNOWN;
+  }
+
+  state_ = State::WAITING_READY;
+
+  // Again wait 2x delays to take next reading
+  this->set_timeout(2 * this->_read_delay, [this]() { this->state_ = State::READY; });
+
+  return i2c::ERROR_OK;
 }
 
 void VEML6075Component::update() {
-  if (state_ == State::READY) {
-    takeReading();
+  // Check sensor needs reconfiguring
+  if (state_ == State::READY && checkReconfigure() != i2c::ERROR_OK) {
+    ESP_LOGE(TAG, "Failed to reconfigure sensor!");
+    return;
+  }
+  
 
+  if (state_ == State::READY) {
+    // Take and publish reading
+    if (takeReading() != i2c::ERROR_OK) {
+      ESP_LOGE(TAG, "Failed to take reading - communication error!");
+    }
+
+    // Debug info
     uint8_t data[2] = {0x00};
     this->read_register(REG_ID, data, 2, false);
-    ESP_LOGI(TAG, "Manufacturer id %i,%i", data[0], data[1]);
+    ESP_LOGV(TAG, "Manufacturer id [0x%.2X, 0x%.2X]", data[0], data[1]);
 
     data[2] = {0x00};
     this->read_register(REG_UV_CONF, data, 2, false);
-    ESP_LOGI(TAG, "Conf reg %i,%i", data[0], data[1]);
-
+    ESP_LOGV(TAG, "Conf reg [0x%.2X, 0x%.2X]", data[0], data[1]);
   } else {
-    ESP_LOGI(TAG, "Not ready for reading");
+    ESP_LOGI(TAG, "Sensor not initialised, failed to take reading");
   }
 }
 

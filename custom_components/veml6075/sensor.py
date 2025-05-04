@@ -4,7 +4,9 @@ import esphome.config_validation as cv
 from esphome.const import (
     CONF_ID,
     CONF_INTEGRATION_TIME,
-    ICON_TIMER,
+    DEVICE_CLASS_EMPTY,
+    ICON_BRIGHTNESS_5,
+    STATE_CLASS_MEASUREMENT,
     UNIT_MILLISECOND,
 )
 
@@ -15,21 +17,22 @@ VEML6075Component = veml6075_ns.class_(
     "VEML6075Component", cg.PollingComponent, i2c.I2CDevice
 )
 
+CONF_HIGH_DYNAMIC = "high_dynamic"
+
 CONF_UVA = "uva"
 CONF_UVB = "uvb"
 CONF_UV_INDEX = "uv_index"
-CONF_HIGH_DYNAMIC = "high_dynamic"
 
 CONF_RAW_1 = "raw1"
 CONF_RAW_2 = "raw2"
 CONF_RAW_3 = "raw3"
 CONF_RAW_4 = "raw4"
 
-UNIT_COUNTS = "#" # change this to be sensible
+UNIT_COUNTS = "counts"
 UNIT_UVI = "UVI"
 
 
-IntegrationTime = veml6075_ns.enum("veml6075_integrationtime")
+IntegrationTime = veml6075_ns.enum("veml6075_integrationTime")
 INTEGRATION_TIMES = {
     50: IntegrationTime.VEML6075_50MS,
     100: IntegrationTime.VEML6075_100MS,
@@ -44,7 +47,6 @@ def validate_integration_time(value):
     return cv.enum(INTEGRATION_TIMES, int=True)(value)
 
 
-
 CONFIG_SCHEMA = cv.All(
     cv.Schema(
         {
@@ -53,30 +55,47 @@ CONFIG_SCHEMA = cv.All(
             cv.Optional(CONF_HIGH_DYNAMIC, default=False): cv.boolean,
             cv.Optional(CONF_UVA): sensor.sensor_schema(
                 unit_of_measurement=UNIT_COUNTS,
+                device_class=DEVICE_CLASS_EMPTY,
+                state_class=STATE_CLASS_MEASUREMENT,
+                icon=ICON_BRIGHTNESS_5,
                 accuracy_decimals=6,
             ),
             cv.Optional(CONF_UVB): sensor.sensor_schema(
                 unit_of_measurement=UNIT_COUNTS,
+                device_class=DEVICE_CLASS_EMPTY,
+                state_class=STATE_CLASS_MEASUREMENT,
+                icon=ICON_BRIGHTNESS_5,
                 accuracy_decimals=6,
             ),
             cv.Optional(CONF_UV_INDEX): sensor.sensor_schema(
                 unit_of_measurement=UNIT_UVI,
+                device_class=DEVICE_CLASS_EMPTY,
+                state_class=STATE_CLASS_MEASUREMENT,
+                icon=ICON_BRIGHTNESS_5,
                 accuracy_decimals=6,
             ),
             cv.Optional(CONF_RAW_1): sensor.sensor_schema(
                 unit_of_measurement=UNIT_COUNTS,
+                device_class=DEVICE_CLASS_EMPTY,
+                state_class=STATE_CLASS_MEASUREMENT,
                 accuracy_decimals=2,
             ),
             cv.Optional(CONF_RAW_2): sensor.sensor_schema(
                 unit_of_measurement=UNIT_COUNTS,
+                device_class=DEVICE_CLASS_EMPTY,
+                state_class=STATE_CLASS_MEASUREMENT,
                 accuracy_decimals=2,
             ),
             cv.Optional(CONF_RAW_3): sensor.sensor_schema(
                 unit_of_measurement=UNIT_COUNTS,
+                device_class=DEVICE_CLASS_EMPTY,
+                state_class=STATE_CLASS_MEASUREMENT,
                 accuracy_decimals=2,
             ),
             cv.Optional(CONF_RAW_4): sensor.sensor_schema(
                 unit_of_measurement=UNIT_COUNTS,
+                device_class=DEVICE_CLASS_EMPTY,
+                state_class=STATE_CLASS_MEASUREMENT,
                 accuracy_decimals=2,
             ),
         }

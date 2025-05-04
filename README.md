@@ -19,5 +19,7 @@ Integration for VEML6075
     #  name: "raw3 Test (Comp1)"
     #raw4:
     #  name: "raw4 Test (Comp2)"
+    integration_time: 100ms
+    high_dynamic: false
     update_interval: 20s
 ```

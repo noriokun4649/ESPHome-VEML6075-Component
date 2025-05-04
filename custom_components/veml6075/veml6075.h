@@ -28,15 +28,17 @@ typedef enum {
   REG_UVCOMP1_DATA = 0x0A,
   REG_UVCOMP2_DATA = 0x0B,
   REG_ID = 0x0C
-} VEML6075_REGISTER_t;
+} veml6075_register;
 
-typedef enum veml6075_integrationtime {
+typedef enum {
   VEML6075_50MS = 0b000,
   VEML6075_100MS = 0b001,
   VEML6075_200MS = 0b010,
   VEML6075_400MS = 0b011,
   VEML6075_800MS = 0b100
-} veml6075_integrationtime_t;
+} veml6075_integrationTime;
+
+static const uint8_t MANUFACTURER_ID = 0x26;
 
 class VEML6075Component : public PollingComponent, public i2c::I2CDevice {
  public:
@@ -55,44 +57,47 @@ class VEML6075Component : public PollingComponent, public i2c::I2CDevice {
   void set_raw3_sens(sensor::Sensor *sensor) { this->raw3_sensor_ = sensor; }
   void set_raw4_sens(sensor::Sensor *sensor) { this->raw4_sensor_ = sensor; }
 
-  void set_integration_time(veml6075_integrationtime time) {}
-  void set_high_dynamic(bool hd) {}
+  void set_integration_time(veml6075_integrationTime itime) { _integration_time = itime; }
+  void set_high_dynamic(bool hd) { _hd_enabled = hd; }
 
  protected:
   enum class State : uint8_t {
     INIT,
-    READY
+    WAITING_READY,  // Set when the sensor has just been started to allow time for readings to accumulate
+    READY,
   } state_{State::INIT};
 
-  void configure();
+  // Configuration variables
+  veml6075_integrationTime _integration_time = VEML6075_100MS;
+  bool _hd_enabled = false;
 
-  void shutdown(bool sd);
-
-  void setForcedMode(bool flag);
-  void setIntegrationTime(veml6075_integrationtime_t itime);
-  void setHighDynamic(bool hd);
-
-  void takeReading(void);
-
-  ConfigurationRegister _commandRegister;
+  ConfigurationRegister _command_register;
   uint16_t _read_delay;
 
+  // Sensor variables
   sensor::Sensor *uva_sensor_{nullptr};
   sensor::Sensor *uvb_sensor_{nullptr};
   sensor::Sensor *uv_index_sensor_{nullptr};
-
   sensor::Sensor *raw1_sensor_{nullptr};
   sensor::Sensor *raw2_sensor_{nullptr};
   sensor::Sensor *raw3_sensor_{nullptr};
   sensor::Sensor *raw4_sensor_{nullptr};
 
+  bool configure(void);
+  i2c::ErrorCode checkReconfigure(void);
+
+  i2c::ErrorCode shutdown(bool sd);
+  i2c::ErrorCode setForcedMode(bool flag);
+  i2c::ErrorCode setIntegrationTime(veml6075_integrationTime itime);
+  i2c::ErrorCode setHighDynamic(bool hd);
+  i2c::ErrorCode takeReading(void);
 
   float UVA_A_COEF = 2.22;
   float UVA_B_COEF = 1.33;
   float UVB_C_COEF = 2.95;
   float UVB_D_COEF = 1.74;
 
-  float _aResponsivity = 0.001461; // should this change based on integration time
+  float _aResponsivity = 0.001461;  // should this change based on integration time
   float _bResponsivity = 0.002591;
 
   float UV_ALPHA = 1.0;
@@ -100,10 +105,8 @@ class VEML6075Component : public PollingComponent, public i2c::I2CDevice {
   float UV_GAMMA = 1.0;
   float UV_DELTA = 1.0;
 
-  bool _hdEnabled = false;
-
+  // (From sparkfun code) Scalar to multiply UV Index by when High Dynamic enabled
   float HD_SCALAR = 2.0;
-
 };
 
 }  // namespace veml6075
