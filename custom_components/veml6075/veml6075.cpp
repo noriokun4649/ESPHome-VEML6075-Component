@@ -26,7 +26,7 @@ bool VEML6075Component::configure(void) {
   _command_register.reg = 0;
 
   uint8_t data[2] = {0x00};
-  i2c::ErrorCode status = this->read_register(REG_ID, data, 2, false);
+  i2c::ErrorCode status = this->read_register(REG_ID, data, 2);
   if (status != i2c::ERROR_OK) {
     ESP_LOGE(TAG, "Failed to read manufacturer ID");
     return false;
@@ -129,10 +129,10 @@ i2c::ErrorCode VEML6075Component::takeReading(void) {
   uint8_t uvcomp2_data[2] = {0x00};
 
   // Take the reading immediately
-  auto err1 = this->read_register(REG_UVA_DATA, uva_data, 2, false);
-  auto err2 = this->read_register(REG_UVB_DATA, uvb_data, 2, false);
-  auto err3 = this->read_register(REG_UVCOMP1_DATA, uvcomp1_data, 2, false);
-  auto err4 = this->read_register(REG_UVCOMP2_DATA, uvcomp2_data, 2, false);
+  auto err1 = this->read_register(REG_UVA_DATA, uva_data, 2);
+  auto err2 = this->read_register(REG_UVB_DATA, uvb_data, 2);
+  auto err3 = this->read_register(REG_UVCOMP1_DATA, uvcomp1_data, 2);
+  auto err4 = this->read_register(REG_UVCOMP2_DATA, uvcomp2_data, 2);
 
   if (err1 != i2c::ERROR_OK) {
     ESP_LOGE(TAG, "Read UVA register failed");
@@ -215,7 +215,7 @@ void VEML6075Component::dump_config() {
 i2c::ErrorCode VEML6075Component::checkReconfigure(void) {
   // Read the config register
   uint8_t data[2] = {0x00};
-  i2c::ErrorCode err = this->read_register(REG_UV_CONF, data, 2, false);
+  i2c::ErrorCode err = this->read_register(REG_UV_CONF, data, 2);
   if (err != i2c::ERROR_OK) {
     ESP_LOGE(TAG, "Failed to read config register while checking for reconfiguration");
     return err;
@@ -274,11 +274,11 @@ void VEML6075Component::update() {
 
     // Debug info
     uint8_t data[2] = {0x00};
-    this->read_register(REG_ID, data, 2, false);
+    this->read_register(REG_ID, data, 2);
     ESP_LOGV(TAG, "Manufacturer id [0x%.2X, 0x%.2X]", data[0], data[1]);
 
     data[2] = {0x00};
-    this->read_register(REG_UV_CONF, data, 2, false);
+    this->read_register(REG_UV_CONF, data, 2);
     ESP_LOGV(TAG, "Conf reg [0x%.2X, 0x%.2X]", data[0], data[1]);
   } else {
     ESP_LOGI(TAG, "Sensor not initialised, failed to take reading");
