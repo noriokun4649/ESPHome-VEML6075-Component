@@ -4,6 +4,10 @@ Integration for VEML6075
 ## ESPHome Config
 (the commented-out raw values are for debugging)
 ```
+external_components:
+  - source: github://noriokun4649/ESPHome-VEML6075-Component
+
+sensor:
   - platform: veml6075
     uva:
       name: "UVA"
